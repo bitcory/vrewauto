@@ -183,13 +183,17 @@ class VrewController:
         except Exception as e:
             print(f"[경고] CDP 크기 설정 실패: {e}")
 
-    async def dismiss_recovery_popup(self):
-        """파일 복구 팝업이 있으면 '나중에' 클릭"""
-        pos = await self.find_element_center("나중에")
-        if pos:
-            await self.mouse_click(pos["x"], pos["y"])
-            print("[초기화] 파일 복구 팝업 → '나중에' 클릭")
-            await asyncio.sleep(1)
+    async def dismiss_recovery_popup(self, max_wait=10):
+        """파일 복구 팝업 처리 — '나중에' 또는 '삭제' 클릭 (최대 max_wait초 대기)"""
+        for _ in range(max_wait * 2):
+            for btn in ["나중에", "삭제"]:
+                pos = await self.find_element_center(btn)
+                if pos:
+                    await self.mouse_click(pos["x"], pos["y"])
+                    print(f"[초기화] 파일 복구 팝업 → '{btn}' 클릭")
+                    await asyncio.sleep(1)
+                    return
+            await asyncio.sleep(0.5)
 
     @staticmethod
     def dismiss_dictation_popup():
