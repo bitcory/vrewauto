@@ -21,7 +21,7 @@ import websockets
 # 클라우드 서버 URL
 # 환경변수 VREW_SERVER 로 재정의 가능
 # 예) VREW_SERVER=wss://vrewauto.up.railway.app/ws/agent python3 agent.py
-SERVER_URL = os.environ.get("VREW_SERVER", "wss://vrewauto.up.railway.app/ws/agent")
+SERVER_URL = os.environ.get("VREW_SERVER", "wss://web-production-972a4f.up.railway.app/ws/agent")
 
 # vrew_cdp.py 가 같은 디렉토리에 있으므로 그대로 임포트
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
