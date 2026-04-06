@@ -1,0 +1,58 @@
+name: Build Executables
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Mac executable
+        run: |
+          pip3 install pyinstaller websockets
+          pyinstaller --onefile --name vrew-agent agent.py
+      - name: Upload Mac binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: vrew-agent-mac
+          path: dist/vrew-agent
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Windows executable
+        run: |
+          pip install pyinstaller websockets
+          pyinstaller --onefile --name vrew-agent agent.py
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: vrew-agent-windows
+          path: dist/vrew-agent.exe
+
+  release:
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: vrew-agent-mac
+          path: artifacts/mac
+      - uses: actions/download-artifact@v4
+        with:
+          name: vrew-agent-windows
+          path: artifacts/windows
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Build
+          files: |
+            artifacts/mac/vrew-agent
+            artifacts/windows/vrew-agent.exe
