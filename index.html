@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vrew 자동화</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+  .container { max-width: 880px; margin: 40px auto; padding: 0 20px 60px; }
+  h1 { font-size: 24px; margin-bottom: 6px; }
+  .subtitle { color: #888; margin-bottom: 28px; font-size: 14px; }
+
+  .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+  .card h2 .num { color: #00b8d4; }
+
+  /* 에이전트 연결 */
+  .agent-row { display: flex; gap: 10px; align-items: center; }
+  .agent-row input { flex: 1; padding: 10px 14px; border: 2px solid #ddd; border-radius: 8px; font-size: 20px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; text-align: center; }
+  .agent-row input:focus { outline: none; border-color: #00b8d4; }
+  .agent-row input.connected { border-color: #4caf50; background: #f1fff3; }
+  .agent-status { font-size: 13px; margin-top: 8px; color: #888; }
+  .agent-status.ok { color: #4caf50; }
+  .agent-status.err { color: #f44336; }
+
+  /* 이미지 */
+  .drop-zone { border: 2px dashed #ccc; border-radius: 8px; padding: 36px; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .drop-zone:hover, .drop-zone.dragover { border-color: #00b8d4; background: #f0fcff; }
+  .drop-zone input { display: none; }
+  .drop-zone p { color: #888; font-size: 14px; }
+  .image-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .image-item { position: relative; width: 90px; height: 90px; border-radius: 8px; overflow: hidden; }
+  .image-item img { width: 100%; height: 100%; object-fit: cover; }
+  .image-item .num { position: absolute; top: 3px; left: 3px; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; padding: 1px 5px; border-radius: 3px; }
+  .image-item .rm { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,0.65); color: #fff; border: none; cursor: pointer; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; line-height: 18px; text-align: center; }
+
+  /* 대본 */
+  textarea { width: 100%; height: 110px; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-size: 14px; resize: vertical; font-family: inherit; }
+  textarea:focus { outline: none; border-color: #00b8d4; }
+  .hint { font-size: 12px; color: #aaa; margin-top: 5px; }
+
+  /* 설정 */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+  select, input[type="text"], input[type="number"] { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+  select:focus, input:focus { outline: none; border-color: #00b8d4; }
+  .check-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .check-row input { width: 18px; height: 18px; accent-color: #00b8d4; }
+  .check-row label { margin: 0; font-size: 14px; color: #333; }
+
+  /* 실행 버튼 */
+  .btn-run { width: 100%; padding: 15px; background: #00b8d4; color: #fff; border: none; border-radius: 8px; font-size: 17px; font-weight: 600; cursor: pointer; transition: background 0.2s; margin-top: 4px; }
+  .btn-run:hover:not(:disabled) { background: #00a0b8; }
+  .btn-run:disabled { background: #ccc; cursor: not-allowed; }
+
+  /* 로그 */
+  .log-wrap { margin-top: 16px; display: none; }
+  .log-wrap.visible { display: block; }
+  .log-header { font-size: 13px; color: #666; margin-bottom: 6px; }
+  .log-box { background: #111; color: #0f0; border-radius: 8px; padding: 14px 16px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
+  .log-line { padding: 1px 0; white-space: pre-wrap; word-break: break-all; }
+  .log-line.done { color: #4caf50; font-weight: bold; }
+  .log-line.err { color: #f44336; font-weight: bold; }
+
+  /* 상태 */
+  .banner { padding: 13px 16px; border-radius: 8px; font-size: 14px; margin-top: 12px; display: none; }
+  .banner.running { display: block; background: #e3f9fd; color: #00788a; }
+  .banner.done { display: block; background: #e8f5e9; color: #2e7d32; }
+  .banner.error { display: block; background: #fce4ec; color: #c62828; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Vrew 자동화</h1>
+  <p class="subtitle">agent.py 를 실행하면 코드가 표시됩니다. 코드를 입력하고 설정 후 실행하세요.</p>
+
+  <!-- 에이전트 연결 -->
+  <div class="card">
+    <h2><span class="num">0</span> 에이전트 코드</h2>
+    <div class="agent-row">
+      <input type="text" id="agentId" maxlength="6" placeholder="A1B2C3" spellcheck="false">
+      <button onclick="checkAgent()" style="padding:10px 18px;background:#00b8d4;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;white-space:nowrap">연결 확인</button>
+    </div>
+    <p class="agent-status" id="agentStatus">agent.py 실행 후 터미널에 표시된 코드를 입력하세요</p>
+  </div>
+
+  <!-- 이미지 -->
+  <div class="card">
+    <h2><span class="num">1</span> 이미지</h2>
+    <div class="drop-zone" id="dropZone">
+      <p>이미지 파일을 드래그하거나 클릭하여 선택<br><small>순서대로 장면에 매핑됩니다</small></p>
+      <input type="file" id="fileInput" accept="image/*" multiple>
+    </div>
+    <div class="image-list" id="imageList"></div>
+  </div>
+
+  <!-- 대본 -->
+  <div class="card">
+    <h2><span class="num">2</span> 대본</h2>
+    <textarea id="subtitles" placeholder="각 줄이 각 이미지의 자막이 됩니다&#10;&#10;예:&#10;첫 번째 장면의 내레이션&#10;두 번째 장면의 내레이션"></textarea>
+    <p class="hint">줄 수 = 이미지 수 (줄1 → 이미지1, 줄2 → 이미지2)</p>
+  </div>
+
+  <!-- 설정 -->
+  <div class="card">
+    <h2><span class="num">3</span> 설정</h2>
+    <div class="grid2">
+      <div>
+        <label>화면 비율</label>
+        <select id="aspectRatio">
+          <option value="유튜브 (16:9)">유튜브 (16:9)</option>
+          <option value="쇼츠 (9:16)" selected>쇼츠 (9:16)</option>
+          <option value="정방형 (1:1)">정방형 (1:1)</option>
+          <option value="인스타그램 (4:5)">인스타그램 (4:5)</option>
+        </select>
+      </div>
+      <div>
+        <label>채우기 옵션</label>
+        <select id="fillOption">
+          <option value="비율 유지하며 채우기" selected>비율 유지하며 채우기</option>
+          <option value="잘라서 채우기">잘라서 채우기</option>
+          <option value="늘려서 채우기">늘려서 채우기</option>
+        </select>
+      </div>
+      <div>
+        <label>AI 목소리 (비워두면 기본값)</label>
+        <input type="text" id="voiceName" placeholder="예: 손서현">
+      </div>
+      <div>
+        <label>최대 글자수 (클립 나누기)</label>
+        <input type="number" id="maxChars" value="20" min="5" max="50">
+      </div>
+      <div>
+        <label>나누기 기준</label>
+        <select id="splitMode">
+          <option value="의미 기준" selected>의미 기준</option>
+          <option value="글자수 기준">글자수 기준</option>
+        </select>
+      </div>
+      <div>
+        <label>자막 상하 위치</label>
+        <input type="number" id="subtitlePosition" value="-15" min="-50" max="50">
+      </div>
+    </div>
+    <div class="check-row">
+      <input type="checkbox" id="autoAnimation" checked>
+      <label for="autoAnimation">자동 애니메이션</label>
+    </div>
+  </div>
+
+  <button class="btn-run" id="btnRun" disabled>이미지와 대본을 입력하세요</button>
+  <div class="banner" id="banner"></div>
+  <div class="log-wrap" id="logWrap">
+    <p class="log-header">실시간 로그</p>
+    <div class="log-box" id="logBox"></div>
+  </div>
+</div>
+
+<script>
+  let files = [];
+
+  // URL 파라미터에서 agent_id 자동 입력
+  const urlParams = new URLSearchParams(location.search);
+  const agentParam = urlParams.get('agent');
+  if (agentParam) {
+    document.getElementById('agentId').value = agentParam.toUpperCase();
+    document.getElementById('agentId').classList.add('connected');
+    document.getElementById('agentStatus').textContent = `코드 [${agentParam.toUpperCase()}] 자동 입력됨 — 연결 확인을 눌러주세요`;
+  }
+
+  // 에이전트 연결 확인
+  async function checkAgent() {
+    const id = document.getElementById('agentId').value.trim().toUpperCase();
+    if (!id) return;
+    const st = document.getElementById('agentStatus');
+    const inp = document.getElementById('agentId');
+    try {
+      const res = await fetch('/api/agents');
+      const data = await res.json();
+      const found = data.agents.find(a => a.id === id);
+      if (found) {
+        inp.classList.add('connected');
+        st.className = 'agent-status ok';
+        st.textContent = `✓ 에이전트 [${id}] 연결됨 (${found.status === 'idle' ? '대기 중' : '실행 중'})`;
+      } else {
+        inp.classList.remove('connected');
+        st.className = 'agent-status err';
+        st.textContent = `✗ 에이전트 [${id}] 를 찾을 수 없습니다. agent.py 가 실행 중인지 확인하세요.`;
+      }
+    } catch (e) {
+      st.className = 'agent-status err';
+      st.textContent = '서버 연결 오류: ' + e.message;
+    }
+    updateButton();
+  }
+
+  // 이미지 드래그앤드롭
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); addFiles(e.dataTransfer.files); });
+  fileInput.addEventListener('change', e => addFiles(e.target.files));
+
+  function addFiles(newFiles) {
+    for (const f of newFiles) if (f.type.startsWith('image/')) files.push(f);
+    renderImages();
+    updateButton();
+  }
+
+  function renderImages() {
+    const list = document.getElementById('imageList');
+    list.innerHTML = '';
+    files.forEach((f, i) => {
+      const div = document.createElement('div');
+      div.className = 'image-item';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      const num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = i + 1;
+      const rm = document.createElement('button');
+      rm.className = 'rm';
+      rm.textContent = '×';
+      rm.onclick = () => { files.splice(i, 1); renderImages(); updateButton(); };
+      div.append(img, num, rm);
+      list.appendChild(div);
+    });
+  }
+
+  function updateButton() {
+    const hasSubs = document.getElementById('subtitles').value.trim().length > 0;
+    const hasImages = files.length > 0;
+    const hasAgent = document.getElementById('agentId').classList.contains('connected');
+    const btn = document.getElementById('btnRun');
+    btn.disabled = !(hasImages && hasSubs && hasAgent);
+    if (!hasAgent) btn.textContent = '에이전트 코드를 입력하고 연결 확인하세요';
+    else if (!hasImages || !hasSubs) btn.textContent = '이미지와 대본을 입력하세요';
+    else btn.textContent = `Vrew 자동화 시작 (이미지 ${files.length}장)`;
+  }
+
+  document.getElementById('subtitles').addEventListener('input', updateButton);
+  document.getElementById('agentId').addEventListener('input', () => {
+    document.getElementById('agentId').classList.remove('connected');
+    updateButton();
+  });
+
+  // 로그 추가
+  function appendLog(text, cls) {
+    const box = document.getElementById('logBox');
+    const line = document.createElement('div');
+    line.className = 'log-line' + (cls ? ' ' + cls : '');
+    line.textContent = text;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // 이미지 → base64
+  function toBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve({ name: file.name, data: e.target.result });
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // 실행
+  document.getElementById('btnRun').addEventListener('click', async () => {
+    const btn = document.getElementById('btnRun');
+    const banner = document.getElementById('banner');
+    const logWrap = document.getElementById('logWrap');
+    const logBox = document.getElementById('logBox');
+
+    btn.disabled = true;
+    btn.textContent = '실행 중...';
+    banner.className = 'banner running';
+    banner.textContent = '이미지 변환 중...';
+    logBox.innerHTML = '';
+    logWrap.classList.add('visible');
+    appendLog('이미지 변환 중...');
+
+    const agentId = document.getElementById('agentId').value.trim().toUpperCase();
+
+    try {
+      // 이미지 base64 변환
+      const images = await Promise.all(files.map(toBase64));
+      appendLog(`이미지 ${images.length}장 변환 완료`);
+      banner.textContent = 'Vrew 자동화 실행 중...';
+
+      // 1) 작업 전송
+      const payload = {
+        agent_id: agentId,
+        images,
+        subtitles: document.getElementById('subtitles').value,
+        aspect_ratio: document.getElementById('aspectRatio').value,
+        fill_option: document.getElementById('fillOption').value,
+        voice_name: document.getElementById('voiceName').value,
+        auto_animation: document.getElementById('autoAnimation').checked,
+        max_chars: parseInt(document.getElementById('maxChars').value),
+        split_mode: document.getElementById('splitMode').value,
+        subtitle_position: parseInt(document.getElementById('subtitlePosition').value),
+      };
+
+      const runRes = await fetch('/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!runRes.ok) {
+        const err = await runRes.json();
+        throw new Error(err.detail || '실행 요청 실패');
+      }
+
+      // 2) SSE 로그 스트림
+      const es = new EventSource(`/api/logs/${agentId}`);
+      es.onmessage = e => appendLog(e.data);
+      es.addEventListener('done', e => {
+        es.close();
+        if (e.data === 'ok') {
+          banner.className = 'banner done';
+          banner.textContent = '✓ 자동화 완료! Vrew에서 결과를 확인하세요.';
+          appendLog('✓ 완료', 'done');
+        } else {
+          banner.className = 'banner error';
+          banner.textContent = '오류 발생 — 로그를 확인하세요.';
+          appendLog('✗ ' + e.data.replace('error:', ''), 'err');
+        }
+        updateButton();
+      });
+      es.onerror = () => {
+        es.close();
+        banner.className = 'banner error';
+        banner.textContent = '로그 스트림 연결 오류';
+        updateButton();
+      };
+
+    } catch (e) {
+      banner.className = 'banner error';
+      banner.textContent = '오류: ' + e.message;
+      appendLog('✗ ' + e.message, 'err');
+      updateButton();
+    }
+  });
+</script>
+</body>
+</html>
