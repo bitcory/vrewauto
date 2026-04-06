@@ -1,11 +1,8 @@
 """
 Vrew 자동화 로컬 에이전트
 
-사용법:
-  python3 agent.py
-
-실행하면 연결 코드가 출력됩니다.
-웹 UI에서 그 코드를 입력하면 이 PC의 Vrew 가 자동으로 동작합니다.
+처음 실행: 초대 코드 입력 → 토큰 발급 → 자동 저장
+이후 실행: 저장된 토큰으로 자동 연결
 """
 
 import asyncio
@@ -14,79 +11,107 @@ import sys
 import os
 import base64
 import tempfile
+import subprocess
 from pathlib import Path
 
 import websockets
 
 # 클라우드 서버 URL
-# 환경변수 VREW_SERVER 로 재정의 가능
-# 예) VREW_SERVER=wss://vrewauto.up.railway.app/ws/agent python3 agent.py
-SERVER_URL = os.environ.get("VREW_SERVER", "wss://web-production-972a4f.up.railway.app/ws/agent")
+SERVER_URL = os.environ.get("VREW_SERVER", "wss://web-production-972a4f.up.railway.app")
 
-# vrew_cdp.py 가 같은 디렉토리에 있으므로 그대로 임포트
+# 토큰 저장 경로
+if sys.platform == "win32":
+    TOKEN_FILE = Path(os.environ.get("APPDATA", "~")) / "vrew_agent_token"
+else:
+    TOKEN_FILE = Path.home() / ".vrew_agent_token"
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vrew_cdp import VrewController, launch_vrew
 
 
+# ── 토큰 관리 ──────────────────────────────────────────────────────────────────
+
+def load_token() -> str | None:
+    try:
+        return TOKEN_FILE.read_text().strip() or None
+    except Exception:
+        return None
+
+def save_token(token: str):
+    TOKEN_FILE.write_text(token)
+
+async def activate(invite_code: str) -> str | None:
+    """초대 코드 → 토큰 발급"""
+    import urllib.request
+    url = SERVER_URL.replace("wss://", "https://").replace("ws://", "http://")
+    req = urllib.request.Request(
+        f"{url}/api/auth/activate",
+        data=json.dumps({"invite_code": invite_code}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as res:
+            data = json.loads(res.read())
+            return data.get("token")
+    except Exception as e:
+        print(f"  오류: {e}")
+        return None
+
+
+# ── 로그 캡처 ─────────────────────────────────────────────────────────────────
+
 class LogCapture:
-    """stdout 을 가로채서 큐에 넣기"""
     def __init__(self, queue: asyncio.Queue):
         self.queue = queue
         self._buf = ""
         self._orig = sys.stdout
 
     def write(self, s):
-        self._orig.write(s)  # 터미널에도 출력
+        self._orig.write(s)
         self._buf += s
         while "\n" in self._buf:
             line, self._buf = self._buf.split("\n", 1)
             if line.strip():
                 self.queue.put_nowait(line)
 
-    def flush(self):
-        self._orig.flush()
+    def flush(self): self._orig.flush()
+    def restore(self): sys.stdout = self._orig
 
-    def restore(self):
-        sys.stdout = self._orig
 
+# ── 작업 실행 ─────────────────────────────────────────────────────────────────
 
 async def run_job(ws, params: dict):
-    """작업 실행: 이미지 저장 → Vrew 자동화 → 로그 전송"""
     log_queue: asyncio.Queue = asyncio.Queue()
-
-    # stdout 캡처 시작
     capture = LogCapture(log_queue)
     sys.stdout = capture
-
     ok = True
     error_msg = ""
+    tmp_dir = None
 
     async def flush_logs():
-        """큐에 쌓인 로그를 WebSocket으로 전송"""
         while not log_queue.empty():
-            line = log_queue.get_nowait()
-            await ws.send(json.dumps({"type": "log", "text": line}))
+            await ws.send(json.dumps({"type": "log", "text": log_queue.get_nowait()}))
 
     try:
-        # 1) base64 이미지 → 임시 파일로 저장
+        # 이미지 저장
         images = params.get("images", [])
         tmp_dir = Path(tempfile.mkdtemp(prefix="vrew_"))
         image_paths = []
         for i, img in enumerate(images):
             b64 = img["data"].split(",")[-1]
-            raw = base64.b64decode(b64)
             ext = Path(img["name"]).suffix or ".png"
             dest = tmp_dir / f"scene_{i:03d}{ext}"
-            dest.write_bytes(raw)
+            dest.write_bytes(base64.b64decode(b64))
             image_paths.append(str(dest))
 
         print(f"[에이전트] 이미지 {len(image_paths)}장 저장 완료")
         await flush_logs()
 
-        # 2) Vrew 연결
-        import urllib.request
+        # Vrew 연결
+        import urllib.request as ur
         try:
-            urllib.request.urlopen("http://localhost:9222/json/list", timeout=2)
+            ur.urlopen("http://localhost:9222/json/list", timeout=2)
         except Exception:
             print("[에이전트] Vrew 실행 중...")
             await flush_logs()
@@ -101,7 +126,7 @@ async def run_job(ws, params: dict):
         await ctrl.go_home()
         await flush_logs()
 
-        # 3) 자동화 실행
+        # 자동화 실행
         anim = str(params.get("auto_animation", "true")).lower() in ("true", "1", "on")
         voice = params.get("voice_name", "").strip() or None
 
@@ -114,86 +139,91 @@ async def run_job(ws, params: dict):
             auto_animation=anim,
         )
         await flush_logs()
-
         await ctrl.click_create_video()
-        await flush_logs()
-
         await ctrl.wait_for_video_complete(timeout=300)
         await asyncio.sleep(1)
         await flush_logs()
-
         await ctrl.auto_clip_split(
             max_chars=int(params.get("max_chars", 20)),
             method=params.get("split_mode", "의미 기준"),
         )
+        await ctrl.set_subtitle_position(vertical_value=int(params.get("subtitle_position", -15)))
         await flush_logs()
-
-        await ctrl.set_subtitle_position(
-            vertical_value=int(params.get("subtitle_position", -15))
-        )
-        await flush_logs()
-
         await ctrl.close()
         print("[에이전트] 자동화 완료!")
         await flush_logs()
 
     except Exception as e:
         import traceback
-        tb = traceback.format_exc()
         ok = False
         error_msg = str(e)
-        print(f"[에이전트] 오류: {e}")
-        print(tb)
+        print(f"[에이전트] 오류: {e}\n{traceback.format_exc()}")
         await flush_logs()
     finally:
         capture.restore()
-        # 임시 파일 정리
-        try:
+        if tmp_dir:
             import shutil
             shutil.rmtree(tmp_dir, ignore_errors=True)
-        except Exception:
-            pass
 
-    # 완료 신호
     await ws.send(json.dumps({"type": "done", "ok": ok, "error": error_msg}))
 
+
+# ── 메인 ──────────────────────────────────────────────────────────────────────
 
 async def main():
     print("=" * 50)
     print("  Vrew 자동화 에이전트")
     print("=" * 50)
-    print(f"서버 연결 중: {SERVER_URL}")
+
+    # 토큰 로드 또는 초대 코드로 발급
+    token = load_token()
+
+    if not token:
+        print("\n처음 실행입니다. 초대 코드를 입력하세요.")
+        while True:
+            code = input("초대 코드: ").strip().upper()
+            if not code:
+                continue
+            print("인증 중...")
+            token = await activate(code)
+            if token:
+                save_token(token)
+                print(f"✓ 인증 완료! 토큰이 저장되었습니다.\n")
+                break
+            else:
+                print("✗ 유효하지 않은 초대 코드입니다. 다시 입력해주세요.\n")
+
+    ws_url = SERVER_URL.replace("https://", "wss://").replace("http://", "ws://")
+    ws_url = f"{ws_url}/ws/agent?token={token}"
 
     retry_delay = 3
 
     while True:
         try:
             async with websockets.connect(
-                SERVER_URL,
-                max_size=100 * 1024 * 1024,  # 100MB (이미지 전송용)
+                ws_url,
+                max_size=100 * 1024 * 1024,
                 ping_interval=20,
                 ping_timeout=10,
             ) as ws:
-                # 연결 확인 + agent_id 수신
                 raw = await ws.recv()
                 data = json.loads(raw)
-                agent_id = data["agent_id"]
 
-                server_base = SERVER_URL.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/agent", "")
-                print(f"\n✓ 연결됨! 에이전트 코드: [{agent_id}]")
-                print(f"\n브라우저에서 접속: {server_base}/?agent={agent_id}")
+                server_base = SERVER_URL.replace("wss://", "https://").replace("ws://", "http://")
+                url = f"{server_base}/?t={token}"
+                print(f"\n✓ 연결됨!")
+                print(f"브라우저에서 접속: {url}")
                 print("-" * 50)
                 print("작업을 기다리는 중... (Ctrl+C 로 종료)\n")
 
-                retry_delay = 3  # 성공하면 재시도 딜레이 초기화
-
                 # 브라우저 자동 오픈
-                import subprocess
-                server_base = SERVER_URL.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/agent", "")
-                url = f"{server_base}/?agent={agent_id}"
-                subprocess.Popen(["open", url])
+                if sys.platform == "win32":
+                    os.startfile(url)
+                else:
+                    subprocess.Popen(["open", url])
 
-                # 메시지 수신 루프
+                retry_delay = 3
+
                 async for raw in ws:
                     msg = json.loads(raw)
                     if msg["type"] == "job":
@@ -205,7 +235,7 @@ async def main():
 
         except (websockets.exceptions.ConnectionClosed, OSError, ConnectionRefusedError) as e:
             print(f"\n[연결 끊김] {e}")
-            print(f"{retry_delay}초 후 재연결 시도...")
+            print(f"{retry_delay}초 후 재연결...")
             await asyncio.sleep(retry_delay)
             retry_delay = min(retry_delay * 2, 30)
         except KeyboardInterrupt:
