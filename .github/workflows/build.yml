@@ -3,6 +3,9 @@ name: Build Executables
 on:
   push:
     branches: [main]
+    paths:
+      - 'agent.py'
+      - 'vrew_cdp.py'
 
 jobs:
   build-mac:
@@ -15,8 +18,7 @@ jobs:
           source venv/bin/activate
           pip install pyinstaller websockets
           pyinstaller --onefile --name vrew-agent agent.py
-      - name: Upload Mac binary
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: vrew-agent-mac
           path: dist/vrew-agent
@@ -31,13 +33,12 @@ jobs:
           venv\Scripts\activate
           pip install pyinstaller websockets
           pyinstaller --onefile --name vrew-agent agent.py
-      - name: Upload Windows binary
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: vrew-agent-windows
           path: dist/vrew-agent.exe
 
-  release:
+  commit-binaries:
     needs: [build-mac, build-windows]
     runs-on: ubuntu-latest
     permissions:
@@ -47,17 +48,17 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: vrew-agent-mac
-          path: artifacts/mac
+          path: dist
       - uses: actions/download-artifact@v4
         with:
           name: vrew-agent-windows
-          path: artifacts/windows
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: Latest Build
-          make_latest: true
-          files: |
-            artifacts/mac/vrew-agent
-            artifacts/windows/vrew-agent.exe
+          path: dist
+      - name: Commit binaries
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          chmod +x dist/vrew-agent
+          git add dist/vrew-agent dist/vrew-agent.exe
+          git diff --cached --quiet && echo "변경 없음" && exit 0
+          git commit -m "빌드: 실행파일 업데이트 [skip ci]"
+          git push

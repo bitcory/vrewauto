@@ -61,21 +61,19 @@ def token_to_invite(token: str) -> str | None:
 async def index():
     return open(os.path.join(BASE, "index.html")).read()
 
-@app.get("/download/agent.py")
-async def dl_agent():
-    return FileResponse(os.path.join(BASE, "agent.py"), media_type="text/plain", filename="agent.py")
+@app.get("/download/vrew-agent")
+async def dl_mac():
+    path = os.path.join(BASE, "dist", "vrew-agent")
+    if not os.path.exists(path):
+        raise HTTPException(404, "아직 빌드되지 않았습니다. 잠시 후 다시 시도하세요.")
+    return FileResponse(path, media_type="application/octet-stream", filename="vrew-agent")
 
-@app.get("/download/vrew_cdp.py")
-async def dl_cdp():
-    return FileResponse(os.path.join(BASE, "vrew_cdp.py"), media_type="text/plain", filename="vrew_cdp.py")
-
-@app.get("/download/start_windows.bat")
-async def dl_bat():
-    return FileResponse(os.path.join(BASE, "start_windows.bat"), media_type="application/octet-stream", filename="start_windows.bat")
-
-@app.get("/download/start_mac.command")
-async def dl_cmd():
-    return FileResponse(os.path.join(BASE, "start_mac.command"), media_type="application/octet-stream", filename="start_mac.command")
+@app.get("/download/vrew-agent.exe")
+async def dl_win():
+    path = os.path.join(BASE, "dist", "vrew-agent.exe")
+    if not os.path.exists(path):
+        raise HTTPException(404, "아직 빌드되지 않았습니다. 잠시 후 다시 시도하세요.")
+    return FileResponse(path, media_type="application/octet-stream", filename="vrew-agent.exe")
 
 
 # ── 초대 코드 인증 ─────────────────────────────────────────────────────────────
