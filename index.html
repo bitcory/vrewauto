@@ -85,6 +85,26 @@
   <h1>Vrew 자동화</h1>
   <p class="subtitle">agent.py 를 실행하면 코드와 URL 이 표시됩니다.</p>
 
+  <!-- 처음 사용자 안내 -->
+  <details class="card" id="setupGuide">
+    <summary style="cursor:pointer;font-size:15px;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center">
+      <span>📦 처음 사용하시나요? 설치 안내</span>
+      <span style="color:#aaa;font-size:13px">클릭하여 펼치기</span>
+    </summary>
+    <div style="margin-top:16px;line-height:2">
+      <p style="font-size:14px;margin-bottom:12px"><b>1. 파일 다운로드</b> — 아래 두 파일을 같은 폴더에 저장하세요</p>
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <a href="/download/agent.py" download style="flex:1;padding:10px;background:#00b8d4;color:#fff;border-radius:8px;text-align:center;text-decoration:none;font-size:14px;font-weight:600">⬇ agent.py</a>
+        <a href="/download/vrew_cdp.py" download style="flex:1;padding:10px;background:#555;color:#fff;border-radius:8px;text-align:center;text-decoration:none;font-size:14px;font-weight:600">⬇ vrew_cdp.py</a>
+      </div>
+      <p style="font-size:14px;margin-bottom:8px"><b>2. 패키지 설치</b> — 터미널에서 한 번만 실행</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;margin-bottom:16px">pip3 install websockets</pre>
+      <p style="font-size:14px;margin-bottom:8px"><b>3. 에이전트 실행</b> — Vrew 켜진 상태에서</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;margin-bottom:16px">python3 agent.py</pre>
+      <p style="font-size:14px">브라우저가 자동으로 열리고 코드가 입력됩니다 ✓</p>
+    </div>
+  </details>
+
   <!-- 이전 결과 (에이전트 코드 입력 후 확인 시 표시) -->
   <div class="prev-result" id="prevResult" style="display:none">
     <h3 id="prevTitle"></h3>

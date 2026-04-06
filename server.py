@@ -17,7 +17,7 @@ import asyncio
 import os
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -31,12 +31,29 @@ agents: dict = {}
 results: dict = {}
 
 
-# ── 웹 UI ───────────────────────────────────────────────────────────────────
+# ── 웹 UI & 파일 다운로드 ────────────────────────────────────────────────────
+
+BASE = os.path.dirname(__file__)
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    path = os.path.join(os.path.dirname(__file__), "index.html")
-    return open(path).read()
+    return open(os.path.join(BASE, "index.html")).read()
+
+@app.get("/download/agent.py")
+async def download_agent():
+    return FileResponse(
+        os.path.join(BASE, "agent.py"),
+        media_type="text/plain",
+        filename="agent.py",
+    )
+
+@app.get("/download/vrew_cdp.py")
+async def download_vrew_cdp():
+    return FileResponse(
+        os.path.join(BASE, "vrew_cdp.py"),
+        media_type="text/plain",
+        filename="vrew_cdp.py",
+    )
 
 
 # ── 에이전트 WebSocket ───────────────────────────────────────────────────────
