@@ -25,6 +25,9 @@
   .conn-banner.waiting .conn-dot { background: #ffc107; animation: blink 1s infinite; }
   .conn-banner.offline .conn-dot { background: #f44336; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .btn-agent { padding: 7px 16px; background: #00b8d4; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .btn-agent:hover { background: #00a0b8; }
+  .btn-agent:disabled { background: #ccc; cursor: not-allowed; }
 
   /* 이미지 */
   .drop-zone { border: 2px dashed #ccc; border-radius: 8px; padding: 36px; text-align: center; cursor: pointer; transition: all 0.2s; }
@@ -120,9 +123,12 @@
   <p class="subtitle">vrew-agent 를 실행하면 자동으로 연결됩니다.</p>
 
   <!-- 연결 상태 -->
-  <div class="conn-banner waiting" id="connBanner">
-    <div class="conn-dot"></div>
-    <span id="connText">에이전트 연결 대기 중...</span>
+  <div class="conn-banner waiting" id="connBanner" style="justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="conn-dot"></div>
+      <span id="connText">에이전트 연결 대기 중...</span>
+    </div>
+    <button class="btn-agent" id="btnAgent" onclick="startAgent()">▶ 에이전트 실행</button>
   </div>
 
   <!-- 이전 결과 -->
@@ -277,6 +283,32 @@
   }
 
   let agentConnected = false;
+
+  async function startAgent() {
+    const btn = document.getElementById('btnAgent');
+    btn.disabled = true; btn.textContent = '시작 중...';
+    try {
+      const res = await fetch('/api/start-agent', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({token}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || '에이전트 실행 실패');
+        btn.disabled = false; btn.textContent = '▶ 에이전트 실행';
+      } else if (data.status === 'already_connected') {
+        btn.textContent = '✓ 연결됨';
+      } else {
+        btn.textContent = '연결 대기 중...';
+        // 5초 후 재확인
+        setTimeout(() => { btn.disabled = false; btn.textContent = '▶ 에이전트 재실행'; }, 8000);
+      }
+    } catch(e) {
+      alert('오류: ' + e.message);
+      btn.disabled = false; btn.textContent = '▶ 에이전트 실행';
+    }
+  }
   let files = [];
   let activeES = null;
   let pollTimer = null;
@@ -327,6 +359,13 @@
     const b = document.getElementById('connBanner');
     b.className = 'conn-banner ' + type;
     document.getElementById('connText').textContent = text;
+    const btn = document.getElementById('btnAgent');
+    if (type === 'connected') {
+      btn.style.display = 'none';
+    } else {
+      btn.style.display = '';
+      if (!btn.disabled) btn.textContent = '▶ 에이전트 실행';
+    }
   }
 
   // 5초마다 폴링

@@ -14,6 +14,8 @@ import uuid
 import json
 import asyncio
 import os
+import sys
+import subprocess
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
@@ -273,6 +275,44 @@ async def add_code(req: Request, key: str = ""):
         invite_codes.add(code)
     from fastapi.responses import RedirectResponse
     return RedirectResponse(f"/admin?key={key}", status_code=303)
+
+
+# ── 에이전트 실행 (로컬 전용) ─────────────────────────────────────────────────
+
+_agent_proc = None
+
+@app.post("/api/start-agent")
+async def start_agent(req: Request):
+    global _agent_proc
+    body = await req.json()
+    token = body.get("token", "").upper()
+
+    if not token_to_invite(token):
+        raise HTTPException(401, "유효하지 않은 토큰")
+
+    # 이미 연결된 경우
+    if token in sessions:
+        return {"status": "already_connected"}
+
+    # 클라우드 환경 감지 (Railway 등)
+    if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RENDER"):
+        raise HTTPException(400, "클라우드 환경에서는 직접 에이전트를 실행할 수 없습니다. 로컬에서 vrew-agent를 실행하세요.")
+
+    # 이미 실행 중인 프로세스 확인
+    if _agent_proc and _agent_proc.poll() is None:
+        return {"status": "already_running"}
+
+    agent_path = os.path.join(BASE, "agent.py")
+    env = os.environ.copy()
+    env["VREW_TOKEN"] = token  # 토큰 직접 전달 (초대코드 입력 스킵)
+
+    _agent_proc = subprocess.Popen(
+        [sys.executable, agent_path],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return {"status": "started", "pid": _agent_proc.pid}
 
 
 if __name__ == "__main__":

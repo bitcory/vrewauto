@@ -175,8 +175,8 @@ async def main():
     print("  Vrew 자동화 에이전트")
     print("=" * 50)
 
-    # 토큰 로드 또는 초대 코드로 발급
-    token = load_token()
+    # 토큰 로드: 환경변수 → 저장 파일 → 초대 코드 입력
+    token = os.environ.get("VREW_TOKEN", "").strip().upper() or load_token()
 
     if not token:
         print("\n처음 실행입니다. 초대 코드를 입력하세요.")
