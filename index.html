@@ -86,9 +86,35 @@
   /* 설치 안내 */
   details.card summary { cursor: pointer; font-size: 15px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
   details.card summary::-webkit-details-marker { display: none; }
+
+  /* 로그인 화면 */
+  #loginScreen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .login-box { background: #fff; border-radius: 16px; padding: 40px; width: 100%; max-width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,0.10); text-align: center; }
+  .login-box h1 { font-size: 22px; margin-bottom: 6px; }
+  .login-box p { color: #888; font-size: 14px; margin-bottom: 28px; }
+  .login-box input { width: 100%; padding: 12px 16px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; text-align: center; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px; }
+  .login-box input:focus { outline: none; border-color: #00b8d4; }
+  .login-box button { width: 100%; padding: 13px; background: #00b8d4; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .login-box button:hover { background: #00a0b8; }
+  .login-box button:disabled { background: #ccc; cursor: not-allowed; }
+  .login-err { color: #c62828; font-size: 13px; margin-top: 10px; min-height: 18px; }
 </style>
 </head>
 <body>
+
+<!-- 로그인 화면 -->
+<div id="loginScreen" style="display:none">
+  <div class="login-box">
+    <h1>Vrew 자동화</h1>
+    <p>초대 코드를 입력하세요</p>
+    <input type="text" id="inviteInput" placeholder="초대 코드" maxlength="20"
+      oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')doActivate()">
+    <button id="activateBtn" onclick="doActivate()">입력</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="mainApp" style="display:none">
 <div class="container">
   <h1>Vrew 자동화</h1>
   <p class="subtitle">vrew-agent 를 실행하면 자동으로 연결됩니다.</p>
@@ -206,9 +232,50 @@
     <div class="log-box" id="logBox"></div>
   </div>
 </div>
+</div> <!-- /mainApp -->
 
 <script>
-  const token = new URLSearchParams(location.search).get('t') || '';
+  // ── 로그인 처리 ──────────────────────────────────────────────────────────────
+
+  function getToken() {
+    return new URLSearchParams(location.search).get('t') || localStorage.getItem('vrew_token') || '';
+  }
+
+  async function doActivate() {
+    const code = document.getElementById('inviteInput').value.trim().toUpperCase();
+    if (!code) return;
+    const btn = document.getElementById('activateBtn');
+    btn.disabled = true; btn.textContent = '확인 중...';
+    document.getElementById('loginErr').textContent = '';
+    try {
+      const res = await fetch('/api/auth/activate', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({invite_code: code}),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || '유효하지 않은 초대 코드입니다');
+      const {token} = await res.json();
+      localStorage.setItem('vrew_token', token);
+      location.href = '/?t=' + token;
+    } catch(e) {
+      document.getElementById('loginErr').textContent = e.message;
+      btn.disabled = false; btn.textContent = '입력';
+    }
+  }
+
+  // ── 토큰 확인 후 화면 결정 ──────────────────────────────────────────────────
+
+  const token = getToken();
+  if (token) {
+    document.getElementById('mainApp').style.display = 'block';
+    // URL에 토큰 없으면 붙여줌
+    if (!new URLSearchParams(location.search).get('t')) {
+      history.replaceState(null, '', '/?t=' + token);
+    }
+  } else {
+    document.getElementById('loginScreen').style.display = 'flex';
+  }
+
   let agentConnected = false;
   let files = [];
   let activeES = null;
