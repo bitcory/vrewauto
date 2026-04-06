@@ -55,6 +55,22 @@ async def download_vrew_cdp():
         filename="vrew_cdp.py",
     )
 
+@app.get("/download/start_windows.bat")
+async def download_bat():
+    return FileResponse(
+        os.path.join(BASE, "start_windows.bat"),
+        media_type="application/octet-stream",
+        filename="start_windows.bat",
+    )
+
+@app.get("/download/start_mac.command")
+async def download_command():
+    return FileResponse(
+        os.path.join(BASE, "start_mac.command"),
+        media_type="application/octet-stream",
+        filename="start_mac.command",
+    )
+
 
 # ── 에이전트 WebSocket ───────────────────────────────────────────────────────
 

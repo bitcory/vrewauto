@@ -91,17 +91,47 @@
       <span>📦 처음 사용하시나요? 설치 안내</span>
       <span style="color:#aaa;font-size:13px">클릭하여 펼치기</span>
     </summary>
-    <div style="margin-top:16px;line-height:2">
-      <p style="font-size:14px;margin-bottom:12px"><b>1. 파일 다운로드</b> — 아래 두 파일을 같은 폴더에 저장하세요</p>
-      <div style="display:flex;gap:10px;margin-bottom:16px">
-        <a href="/download/agent.py" download style="flex:1;padding:10px;background:#00b8d4;color:#fff;border-radius:8px;text-align:center;text-decoration:none;font-size:14px;font-weight:600">⬇ agent.py</a>
-        <a href="/download/vrew_cdp.py" download style="flex:1;padding:10px;background:#555;color:#fff;border-radius:8px;text-align:center;text-decoration:none;font-size:14px;font-weight:600">⬇ vrew_cdp.py</a>
+    <div style="margin-top:16px">
+
+      <!-- OS 탭 -->
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button onclick="setOS('win')" id="tabWin"
+          style="padding:7px 18px;border-radius:6px;border:none;cursor:pointer;font-size:14px;background:#00b8d4;color:#fff;font-weight:600">
+          🪟 Windows
+        </button>
+        <button onclick="setOS('mac')" id="tabMac"
+          style="padding:7px 18px;border-radius:6px;border:none;cursor:pointer;font-size:14px;background:#eee;color:#333">
+          🍎 Mac
+        </button>
       </div>
-      <p style="font-size:14px;margin-bottom:8px"><b>2. 패키지 설치</b> — 터미널에서 한 번만 실행</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;margin-bottom:16px">pip3 install websockets</pre>
-      <p style="font-size:14px;margin-bottom:8px"><b>3. 에이전트 실행</b> — Vrew 켜진 상태에서</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;margin-bottom:16px">python3 agent.py</pre>
-      <p style="font-size:14px">브라우저가 자동으로 열리고 코드가 입력됩니다 ✓</p>
+
+      <!-- Windows 안내 -->
+      <div id="guideWin">
+        <p style="font-size:14px;margin-bottom:10px"><b>1. 아래 파일 3개를 같은 폴더에 저장</b></p>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+          <a href="/download/start_windows.bat" download style="padding:9px 16px;background:#00b8d4;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">⬇ start_windows.bat</a>
+          <a href="/download/agent.py" download style="padding:9px 16px;background:#555;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">⬇ agent.py</a>
+          <a href="/download/vrew_cdp.py" download style="padding:9px 16px;background:#555;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">⬇ vrew_cdp.py</a>
+        </div>
+        <p style="font-size:14px;margin-bottom:8px"><b>2. Vrew 실행 후 <code style="background:#f0f0f0;padding:1px 6px;border-radius:3px">start_windows.bat</code> 더블클릭</b></p>
+        <p style="font-size:13px;color:#888">브라우저가 자동으로 열리고 코드가 입력됩니다 ✓</p>
+        <p style="font-size:12px;color:#aaa;margin-top:8px">※ Python 3이 설치되어 있어야 합니다 (<a href="https://www.python.org/downloads/" target="_blank">python.org</a>)</p>
+      </div>
+
+      <!-- Mac 안내 -->
+      <div id="guideMac" style="display:none">
+        <p style="font-size:14px;margin-bottom:10px"><b>1. 아래 파일 3개를 같은 폴더에 저장</b></p>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+          <a href="/download/start_mac.command" download style="padding:9px 16px;background:#00b8d4;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">⬇ start_mac.command</a>
+          <a href="/download/agent.py" download style="padding:9px 16px;background:#555;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">⬇ agent.py</a>
+          <a href="/download/vrew_cdp.py" download style="padding:9px 16px;background:#555;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">⬇ vrew_cdp.py</a>
+        </div>
+        <p style="font-size:14px;margin-bottom:8px"><b>2. 터미널에서 한 번만 실행 (권한 설정)</b></p>
+        <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;margin-bottom:12px">chmod +x start_mac.command</pre>
+        <p style="font-size:14px;margin-bottom:8px"><b>3. Vrew 실행 후 <code style="background:#f0f0f0;padding:1px 6px;border-radius:3px">start_mac.command</code> 더블클릭</b></p>
+        <p style="font-size:13px;color:#888">브라우저가 자동으로 열리고 코드가 입력됩니다 ✓</p>
+      </div>
+
     </div>
   </details>
 
@@ -206,6 +236,18 @@
 <script>
   let files = [];
   let activeES = null;
+
+  // OS 탭 전환
+  function setOS(os) {
+    document.getElementById('guideWin').style.display = os === 'win' ? 'block' : 'none';
+    document.getElementById('guideMac').style.display = os === 'mac' ? 'block' : 'none';
+    document.getElementById('tabWin').style.background = os === 'win' ? '#00b8d4' : '#eee';
+    document.getElementById('tabWin').style.color = os === 'win' ? '#fff' : '#333';
+    document.getElementById('tabMac').style.background = os === 'mac' ? '#00b8d4' : '#eee';
+    document.getElementById('tabMac').style.color = os === 'mac' ? '#fff' : '#333';
+  }
+  // 접속 OS 자동 감지
+  if (navigator.platform.toLowerCase().includes('mac')) setOS('mac');
 
   // URL 파라미터에서 agent_id 자동 입력
   const agentParam = new URLSearchParams(location.search).get('agent');
