@@ -15,7 +15,7 @@
   .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
   .card h2 .num { color: #00b8d4; }
 
-  /* 에이전트 연결 */
+  /* 에이전트 */
   .agent-row { display: flex; gap: 10px; align-items: center; }
   .agent-row input { flex: 1; padding: 10px 14px; border: 2px solid #ddd; border-radius: 8px; font-size: 20px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; text-align: center; }
   .agent-row input:focus { outline: none; border-color: #00b8d4; }
@@ -49,33 +49,51 @@
   .check-row input { width: 18px; height: 18px; accent-color: #00b8d4; }
   .check-row label { margin: 0; font-size: 14px; color: #333; }
 
-  /* 실행 버튼 */
+  /* 버튼 */
   .btn-run { width: 100%; padding: 15px; background: #00b8d4; color: #fff; border: none; border-radius: 8px; font-size: 17px; font-weight: 600; cursor: pointer; transition: background 0.2s; margin-top: 4px; }
   .btn-run:hover:not(:disabled) { background: #00a0b8; }
   .btn-run:disabled { background: #ccc; cursor: not-allowed; }
 
+  /* 배너 */
+  .banner { padding: 13px 16px; border-radius: 8px; font-size: 14px; margin-top: 12px; display: none; }
+  .banner.running { display: flex; align-items: center; gap: 10px; background: #e3f9fd; color: #00788a; }
+  .banner.done { display: block; background: #e8f5e9; color: #2e7d32; }
+  .banner.error { display: block; background: #fce4ec; color: #c62828; }
+  .spinner { width: 16px; height: 16px; border: 2px solid #00788a; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   /* 로그 */
   .log-wrap { margin-top: 16px; display: none; }
   .log-wrap.visible { display: block; }
-  .log-header { font-size: 13px; color: #666; margin-bottom: 6px; }
+  .log-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #666; margin-bottom: 6px; }
+  .log-header button { font-size: 12px; padding: 3px 10px; background: #eee; border: none; border-radius: 4px; cursor: pointer; }
   .log-box { background: #111; color: #0f0; border-radius: 8px; padding: 14px 16px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
   .log-line { padding: 1px 0; white-space: pre-wrap; word-break: break-all; }
   .log-line.done { color: #4caf50; font-weight: bold; }
   .log-line.err { color: #f44336; font-weight: bold; }
+  .log-line.dim { color: #666; }
 
-  /* 상태 */
-  .banner { padding: 13px 16px; border-radius: 8px; font-size: 14px; margin-top: 12px; display: none; }
-  .banner.running { display: block; background: #e3f9fd; color: #00788a; }
-  .banner.done { display: block; background: #e8f5e9; color: #2e7d32; }
-  .banner.error { display: block; background: #fce4ec; color: #c62828; }
+  /* 이전 결과 */
+  .prev-result { background: #fff8e1; border: 1px solid #ffe082; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .prev-result h3 { font-size: 14px; color: #856404; margin-bottom: 8px; }
+  .prev-result .meta { font-size: 12px; color: #999; margin-bottom: 8px; }
+  .prev-result .show-log { font-size: 12px; color: #00b8d4; cursor: pointer; text-decoration: underline; }
 </style>
 </head>
 <body>
 <div class="container">
   <h1>Vrew 자동화</h1>
-  <p class="subtitle">agent.py 를 실행하면 코드가 표시됩니다. 코드를 입력하고 설정 후 실행하세요.</p>
+  <p class="subtitle">agent.py 를 실행하면 코드와 URL 이 표시됩니다.</p>
 
-  <!-- 에이전트 연결 -->
+  <!-- 이전 결과 (에이전트 코드 입력 후 확인 시 표시) -->
+  <div class="prev-result" id="prevResult" style="display:none">
+    <h3 id="prevTitle"></h3>
+    <p class="meta" id="prevMeta"></p>
+    <span class="show-log" onclick="togglePrevLog()">▶ 이전 로그 보기</span>
+    <div class="log-box" id="prevLogBox" style="display:none;margin-top:10px"></div>
+  </div>
+
+  <!-- 에이전트 코드 -->
   <div class="card">
     <h2><span class="num">0</span> 에이전트 코드</h2>
     <div class="agent-row">
@@ -150,44 +168,68 @@
   </div>
 
   <button class="btn-run" id="btnRun" disabled>이미지와 대본을 입력하세요</button>
-  <div class="banner" id="banner"></div>
+
+  <div class="banner" id="banner">
+    <div class="spinner" id="bannerSpinner"></div>
+    <span id="bannerText"></span>
+  </div>
+
   <div class="log-wrap" id="logWrap">
-    <p class="log-header">실시간 로그</p>
+    <div class="log-header">
+      <span>실시간 로그</span>
+      <button onclick="clearLog()">지우기</button>
+    </div>
     <div class="log-box" id="logBox"></div>
   </div>
 </div>
 
 <script>
   let files = [];
+  let activeES = null;
 
   // URL 파라미터에서 agent_id 자동 입력
-  const urlParams = new URLSearchParams(location.search);
-  const agentParam = urlParams.get('agent');
+  const agentParam = new URLSearchParams(location.search).get('agent');
   if (agentParam) {
     document.getElementById('agentId').value = agentParam.toUpperCase();
-    document.getElementById('agentId').classList.add('connected');
-    document.getElementById('agentStatus').textContent = `코드 [${agentParam.toUpperCase()}] 자동 입력됨 — 연결 확인을 눌러주세요`;
+    // 페이지 로드 시 자동 연결 확인 + 이전 결과 조회
+    window.addEventListener('load', () => checkAgent(true));
   }
 
-  // 에이전트 연결 확인
-  async function checkAgent() {
+  // ── 에이전트 연결 확인 ─────────────────────────────────────────────────────
+
+  async function checkAgent(auto = false) {
     const id = document.getElementById('agentId').value.trim().toUpperCase();
     if (!id) return;
     const st = document.getElementById('agentStatus');
     const inp = document.getElementById('agentId');
+
     try {
       const res = await fetch('/api/agents');
       const data = await res.json();
       const found = data.agents.find(a => a.id === id);
+
       if (found) {
         inp.classList.add('connected');
+        const isRunning = found.status === 'running';
         st.className = 'agent-status ok';
-        st.textContent = `✓ 에이전트 [${id}] 연결됨 (${found.status === 'idle' ? '대기 중' : '실행 중'})`;
+        st.textContent = isRunning
+          ? `⚡ 에이전트 [${id}] 실행 중...`
+          : `✓ 에이전트 [${id}] 연결됨 — 대기 중`;
+
+        // 실행 중이면 로그 스트림 자동 연결
+        if (isRunning) {
+          showBanner('running', 'Vrew 자동화 실행 중...');
+          startLogStream(id);
+        }
       } else {
         inp.classList.remove('connected');
         st.className = 'agent-status err';
         st.textContent = `✗ 에이전트 [${id}] 를 찾을 수 없습니다. agent.py 가 실행 중인지 확인하세요.`;
       }
+
+      // 이전 실행 결과 조회
+      await loadPrevResult(id);
+
     } catch (e) {
       st.className = 'agent-status err';
       st.textContent = '서버 연결 오류: ' + e.message;
@@ -195,7 +237,72 @@
     updateButton();
   }
 
-  // 이미지 드래그앤드롭
+  // ── 이전 결과 표시 ─────────────────────────────────────────────────────────
+
+  async function loadPrevResult(agentId) {
+    try {
+      const res = await fetch(`/api/result/${agentId}`);
+      const data = await res.json();
+      if (!data.found) return;
+
+      const box = document.getElementById('prevResult');
+      const title = document.getElementById('prevTitle');
+      const meta = document.getElementById('prevMeta');
+      const logBox = document.getElementById('prevLogBox');
+
+      if (data.running) {
+        // 실행 중이면 이전 결과 숨기고 로그 스트림 연결
+        box.style.display = 'none';
+        return;
+      }
+
+      if (data.ok === null) return; // 아직 실행 안 됨
+
+      box.style.display = 'block';
+      if (data.ok) {
+        title.textContent = '✓ 마지막 실행 완료';
+        title.style.color = '#2e7d32';
+        box.style.background = '#f1fff3';
+        box.style.borderColor = '#a5d6a7';
+      } else {
+        title.textContent = '✗ 마지막 실행 실패';
+        title.style.color = '#c62828';
+        box.style.background = '#fff5f5';
+        box.style.borderColor = '#ef9a9a';
+      }
+
+      const start = data.started_at || '';
+      const end = data.finished_at || '진행 중';
+      meta.textContent = `시작: ${start}  /  완료: ${end}`;
+
+      // 이전 로그 채우기
+      logBox.innerHTML = '';
+      (data.logs || []).forEach(line => {
+        const el = document.createElement('div');
+        el.className = 'log-line dim';
+        el.textContent = line;
+        logBox.appendChild(el);
+      });
+    } catch (e) {
+      // 무시
+    }
+  }
+
+  function togglePrevLog() {
+    const box = document.getElementById('prevLogBox');
+    const btn = document.querySelector('.show-log');
+    if (box.style.display === 'none') {
+      box.style.display = 'block';
+      btn.textContent = '▼ 이전 로그 숨기기';
+      box.scrollTop = box.scrollHeight;
+    } else {
+      box.style.display = 'none';
+      btn.textContent = '▶ 이전 로그 보기';
+    }
+  }
+
+  // ── 이미지 ─────────────────────────────────────────────────────────────────
+
   const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('fileInput');
   dropZone.addEventListener('click', () => fileInput.click());
@@ -206,8 +313,7 @@
 
   function addFiles(newFiles) {
     for (const f of newFiles) if (f.type.startsWith('image/')) files.push(f);
-    renderImages();
-    updateButton();
+    renderImages(); updateButton();
   }
 
   function renderImages() {
@@ -219,11 +325,9 @@
       const img = document.createElement('img');
       img.src = URL.createObjectURL(f);
       const num = document.createElement('span');
-      num.className = 'num';
-      num.textContent = i + 1;
+      num.className = 'num'; num.textContent = i + 1;
       const rm = document.createElement('button');
-      rm.className = 'rm';
-      rm.textContent = '×';
+      rm.className = 'rm'; rm.textContent = '×';
       rm.onclick = () => { files.splice(i, 1); renderImages(); updateButton(); };
       div.append(img, num, rm);
       list.appendChild(div);
@@ -247,9 +351,11 @@
     updateButton();
   });
 
-  // 로그 추가
+  // ── 로그 ───────────────────────────────────────────────────────────────────
+
   function appendLog(text, cls) {
     const box = document.getElementById('logBox');
+    document.getElementById('logWrap').classList.add('visible');
     const line = document.createElement('div');
     line.className = 'log-line' + (cls ? ' ' + cls : '');
     line.textContent = text;
@@ -257,40 +363,79 @@
     box.scrollTop = box.scrollHeight;
   }
 
-  // 이미지 → base64
+  function clearLog() {
+    document.getElementById('logBox').innerHTML = '';
+  }
+
+  function showBanner(type, text) {
+    const b = document.getElementById('banner');
+    const spinner = document.getElementById('bannerSpinner');
+    const t = document.getElementById('bannerText');
+    b.className = 'banner ' + type;
+    t.textContent = text;
+    spinner.style.display = type === 'running' ? 'block' : 'none';
+  }
+
+  // ── 로그 스트림 연결 ───────────────────────────────────────────────────────
+
+  function startLogStream(agentId) {
+    if (activeES) { activeES.close(); activeES = null; }
+
+    const es = new EventSource(`/api/logs/${agentId}`);
+    activeES = es;
+
+    es.onmessage = e => appendLog(e.data);
+
+    es.addEventListener('done', e => {
+      es.close(); activeES = null;
+      if (e.data === 'ok') {
+        showBanner('done', '✓ 자동화 완료! Vrew에서 결과를 확인하세요.');
+        appendLog('✓ 완료', 'done');
+      } else {
+        showBanner('error', '오류 발생 — 로그를 확인하세요.');
+        appendLog('✗ ' + e.data.replace('error:', ''), 'err');
+      }
+      // 결과 카드 갱신
+      const id = document.getElementById('agentId').value.trim().toUpperCase();
+      setTimeout(() => loadPrevResult(id), 500);
+      updateButton();
+    });
+
+    es.onerror = () => {
+      // 연결 끊겼을 때 — 완료 됐을 가능성 있으므로 조용히 닫기
+      es.close(); activeES = null;
+    };
+  }
+
+  // ── 실행 ───────────────────────────────────────────────────────────────────
+
   function toBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve({ name: file.name, data: e.target.result });
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = e => res({ name: file.name, data: e.target.result });
+      r.onerror = rej;
+      r.readAsDataURL(file);
     });
   }
 
-  // 실행
   document.getElementById('btnRun').addEventListener('click', async () => {
+    const agentId = document.getElementById('agentId').value.trim().toUpperCase();
     const btn = document.getElementById('btnRun');
-    const banner = document.getElementById('banner');
-    const logWrap = document.getElementById('logWrap');
-    const logBox = document.getElementById('logBox');
 
     btn.disabled = true;
     btn.textContent = '실행 중...';
-    banner.className = 'banner running';
-    banner.textContent = '이미지 변환 중...';
-    logBox.innerHTML = '';
-    logWrap.classList.add('visible');
+    document.getElementById('prevResult').style.display = 'none';
+    document.getElementById('logBox').innerHTML = '';
+    document.getElementById('logWrap').classList.add('visible');
+    showBanner('running', '이미지 변환 중...');
     appendLog('이미지 변환 중...');
 
-    const agentId = document.getElementById('agentId').value.trim().toUpperCase();
-
     try {
-      // 이미지 base64 변환
       const images = await Promise.all(files.map(toBase64));
       appendLog(`이미지 ${images.length}장 변환 완료`);
-      banner.textContent = 'Vrew 자동화 실행 중...';
 
-      // 1) 작업 전송
+      showBanner('running', 'Vrew 자동화 실행 중... (브라우저 닫아도 계속 실행됩니다)');
+
       const payload = {
         agent_id: agentId,
         images,
@@ -309,37 +454,17 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
       if (!runRes.ok) {
         const err = await runRes.json();
         throw new Error(err.detail || '실행 요청 실패');
       }
 
-      // 2) SSE 로그 스트림
-      const es = new EventSource(`/api/logs/${agentId}`);
-      es.onmessage = e => appendLog(e.data);
-      es.addEventListener('done', e => {
-        es.close();
-        if (e.data === 'ok') {
-          banner.className = 'banner done';
-          banner.textContent = '✓ 자동화 완료! Vrew에서 결과를 확인하세요.';
-          appendLog('✓ 완료', 'done');
-        } else {
-          banner.className = 'banner error';
-          banner.textContent = '오류 발생 — 로그를 확인하세요.';
-          appendLog('✗ ' + e.data.replace('error:', ''), 'err');
-        }
-        updateButton();
-      });
-      es.onerror = () => {
-        es.close();
-        banner.className = 'banner error';
-        banner.textContent = '로그 스트림 연결 오류';
-        updateButton();
-      };
+      appendLog('실행 시작됨 — 로그 스트리밍 중...');
+      startLogStream(agentId);
 
     } catch (e) {
-      banner.className = 'banner error';
-      banner.textContent = '오류: ' + e.message;
+      showBanner('error', '오류: ' + e.message);
       appendLog('✗ ' + e.message, 'err');
       updateButton();
     }
